@@ -6,8 +6,9 @@
 #include <stdlib.h>
 #include <netinet/in.h>
 #include <string.h>
+#include <pwd.h>
 
-#define PORT 80
+#define PORT 8086
 int main(int argc, char const *argv[])
 {
     int server_fd, new_socket, valread;
@@ -27,8 +28,11 @@ int main(int argc, char const *argv[])
     }
 
     // Attaching socket to port 80
-    if (setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR | SO_REUSEPORT,
-                                                  &opt, sizeof(opt)))
+    //removing SO_REUSEPORT for macOS
+    //if (setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR | SO_REUSEPORT,
+    //                                              &opt, sizeof(opt)))
+    if (setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)))
+    
     {
         perror("setsockopt");
         exit(EXIT_FAILURE);
@@ -44,6 +48,7 @@ int main(int argc, char const *argv[])
         perror("bind failed");
         exit(EXIT_FAILURE);
     }
+
     if (listen(server_fd, 3) < 0)
     {
         perror("listen");
@@ -55,9 +60,22 @@ int main(int argc, char const *argv[])
         perror("accept");
         exit(EXIT_FAILURE);
     }
-    valread = read( new_socket , buffer, 1024);
-    printf("%s\n",buffer );
-    send(new_socket , hello , strlen(hello) , 0 );
-    printf("Hello message sent\n");
+    pid_t pid = fork();
+    if(pid< 0){ 
+        perror("Error in fork");
+        exit(EXIT_FAILURE);
+    }
+    else if(pid == 0){
+        printf("Child UID is: %d\n", (int)getpwnam("nobody"));
+        setuid(getpwnam("nobody")->pw_uid);
+        valread = read( new_socket , buffer, 1024);
+        printf("%s\n",buffer );
+        send(new_socket , hello , strlen(hello) , 0 );
+        printf("Hello message sent\n");
+        printf("End - child");
+    }else {
+        wait(NULL);
+        printf("End - parent");
+    }
     return 0;
 }
